@@ -1,6 +1,7 @@
 package porcupine
 
 import (
+	"log"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -255,6 +256,9 @@ func unlift(entry *node) {
 }
 
 func checkSingle(model Model, history []entry, computePartial bool, kill *int32) (bool, []*[]int) {
+	log.Println("checkSingle started")
+	defer log.Println("checkSingle ended")
+
 	entry := makeLinkedEntries(history)
 	n := length(entry) / 2
 	linearized := newBitset(uint(n))
@@ -267,11 +271,14 @@ func checkSingle(model Model, history []entry, computePartial bool, kill *int32)
 	headEntry := insertBefore(&node{value: nil, match: nil, id: -1}, entry)
 	for headEntry.next != nil {
 		if atomic.LoadInt32(kill) != 0 {
+			log.Println("checkSingle killed")
 			return false, longest
 		}
 		if entry.match != nil {
 			matching := entry.match // the return entry
+			log.Println("before step")
 			ok, newState := model.Step(state, entry.value, matching.value)
+			log.Println("after step")
 			if ok {
 				newLinearized := linearized.clone().set(uint(entry.id))
 				newCacheEntry := cacheEntry{newLinearized, newState}
@@ -353,6 +360,9 @@ func fillDefault(model Model) Model {
 }
 
 func checkParallel(model Model, history [][]entry, computeInfo bool, timeout time.Duration) (CheckResult, LinearizationInfo) {
+	log.Println("checkParallel started")
+	defer log.Println("checkParallel ended")
+
 	if len(history) == 0 {
 		return Ok, LinearizationInfo{}
 	}
@@ -380,6 +390,7 @@ loop:
 			count++
 			ok = ok && result
 			if !ok && !computeInfo {
+				log.Println("kill set to 1")
 				atomic.StoreInt32(&kill, 1)
 				break loop
 			}
@@ -388,6 +399,7 @@ loop:
 			}
 		case <-timeoutChan:
 			timedOut = true
+			log.Println("kill set to 1")
 			atomic.StoreInt32(&kill, 1)
 			break loop // if we time out, we might get a false positive
 		}
